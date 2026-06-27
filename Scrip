@@ -1,0 +1,413 @@
+-- ==========================================================
+-- SCRIPT: TIMEBOMB JUKES VIP V6.7 (GIỮ NÚT TP KHI THU NHỎ)
+-- TÍNH NĂNG: Thu nhỏ (Giữ lại 2 nút TP), Tăng tốc (Có ô nhập), 
+--            Auto-TP, Lưu vị trí x2, Nút Nhảy Ảo, Tùy chỉnh Nhảy Cao.
+-- ==========================================================
+
+local player = game:GetService("Players").LocalPlayer
+local runService = game:GetService("RunService")
+
+-- Các biến lưu trạng thái
+local _G_Settings = {
+    SpeedEnabled = false,
+    ShrinkEnabled = false,
+    AutoTPEnabled = false,
+    JumpEnabled = false,         
+    VirtualJumpEnabled = false,  
+    WalkSpeedValue = 50,         
+    JumpPowerValue = 100,        
+    MaxStuds = 50 
+}
+
+-- Biến lưu vị trí song song (Waypoint 1 và 2)
+local autoTPLastLocation = nil 
+local customSavedLocation1 = nil 
+local customSavedLocation2 = nil 
+
+-- ==========================================
+-- PHẦN 1: TẠO GIAO DIỆN (GUI)
+-- ==========================================
+local screenGui = Instance.new("ScreenGui", game.CoreGui)
+screenGui.Name = "TimeBombVIP_V6_7"
+
+-- 1A. MINI MENU TIỆN ÍCH (Mở rộng để giữ 2 nút Dịch chuyển khi thu nhỏ)
+local miniFrame = Instance.new("Frame", screenGui)
+miniFrame.Size = UDim2.new(0, 340, 0, 45) -- Kích thước thanh ngang gọn gàng
+miniFrame.Position = UDim2.new(0.05, 0, 0.05, 0) -- Đặt ở góc trên bên trái cho dễ nhìn
+miniFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+miniFrame.BackgroundTransparency = 0.3 -- Hơi trong suốt để không che tầm nhìn
+miniFrame.Active = true
+miniFrame.Draggable = true
+Instance.new("UICorner", miniFrame).CornerRadius = UDim.new(0, 8)
+
+-- Nút Ẩn/Hiện Menu chính
+local toggleMenuBtn = Instance.new("TextButton", miniFrame)
+toggleMenuBtn.Size = UDim2.new(0, 100, 0, 35)
+toggleMenuBtn.Position = UDim2.new(0, 5, 0, 5)
+toggleMenuBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+toggleMenuBtn.Text = "Ẩn/Hiện Menu"
+toggleMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleMenuBtn.Font = Enum.Font.GothamBold
+toggleMenuBtn.TextSize = 12
+Instance.new("UICorner", toggleMenuBtn).CornerRadius = UDim.new(0, 6)
+
+-- NÚT DỊCH CHUYỂN 1 (Luôn giữ lại khi thu nhỏ)
+local miniTp1Btn = Instance.new("TextButton", miniFrame)
+miniTp1Btn.Size = UDim2.new(0, 110, 0, 35)
+miniTp1Btn.Position = UDim2.new(0, 110, 0, 5)
+miniTp1Btn.BackgroundColor3 = Color3.fromRGB(241, 196, 15)
+miniTp1Btn.Text = "🚀 Dịch chuyển 1"
+miniTp1Btn.TextColor3 = Color3.fromRGB(25, 25, 25)
+miniTp1Btn.Font = Enum.Font.GothamBold
+miniTp1Btn.TextSize = 11
+Instance.new("UICorner", miniTp1Btn).CornerRadius = UDim.new(0, 6)
+
+-- NÚT DỊCH CHUYỂN 2 (Luôn giữ lại khi thu nhỏ)
+local miniTp2Btn = Instance.new("TextButton", miniFrame)
+miniTp2Btn.Size = UDim2.new(0, 110, 0, 35)
+miniTp2Btn.Position = UDim2.new(0, 225, 0, 5)
+miniTp2Btn.BackgroundColor3 = Color3.fromRGB(241, 196, 15)
+miniTp2Btn.Text = "🚀 Dịch chuyển 2"
+miniTp2Btn.TextColor3 = Color3.fromRGB(25, 25, 25)
+miniTp2Btn.Font = Enum.Font.GothamBold
+miniTp2Btn.TextSize = 11
+Instance.new("UICorner", miniTp2Btn).CornerRadius = UDim.new(0, 6)
+
+-- 1B. NÚT NHẢY ẢO DI CHUYỂN ĐƯỢC
+local virtualJumpFrame = Instance.new("Frame", screenGui)
+virtualJumpFrame.Size = UDim2.new(0, 60, 0, 60)
+virtualJumpFrame.Position = UDim2.new(0.8, 0, 0.7, 0)
+virtualJumpFrame.BackgroundTransparency = 1
+virtualJumpFrame.Visible = false 
+virtualJumpFrame.Active = true
+virtualJumpFrame.Draggable = true
+
+local vJumpBtn = Instance.new("TextButton", virtualJumpFrame)
+vJumpBtn.Size = UDim2.new(1, 0, 1, 0)
+vJumpBtn.BackgroundColor3 = Color3.fromRGB(52, 152, 219)
+vJumpBtn.Text = "⬆️"
+vJumpBtn.TextSize = 25
+Instance.new("UICorner", vJumpBtn).CornerRadius = UDim.new(1, 0)
+
+vJumpBtn.MouseButton1Down:Connect(function()
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- 1C. MENU CHÍNH (Đã tối ưu chiều cao xuống 480 vì bớt nút)
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 220, 0, 480) 
+mainFrame.Position = UDim2.new(0.2, 0, 0.2, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+mainFrame.Active = true
+mainFrame.Draggable = true
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+
+local title = Instance.new("TextLabel", mainFrame)
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.Text = "TIMEBOMB VIP V6.7"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+
+-- Sự kiện ẩn hiện Menu chính
+toggleMenuBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = not mainFrame.Visible
+end)
+
+-- Hàm tạo nút bật tắt (Toggle) cho Menu chính
+local function createToggle(name, yPos, settingKey)
+    local btn = Instance.new("TextButton", mainFrame)
+    btn.Size = UDim2.new(0.85, 0, 0, 40)
+    btn.Position = UDim2.new(0.075, 0, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    btn.Text = name .. " [TẮT]"
+    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 14
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    
+    btn.MouseButton1Click:Connect(function()
+        _G_Settings[settingKey] = not _G_Settings[settingKey]
+        if _G_Settings[settingKey] then
+            btn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+            btn.Text = name .. " [BẬT]"
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+            btn.Text = name .. " [TẮT]"
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            if settingKey == "AutoTPEnabled" then autoTPLastLocation = nil end
+        end
+        if settingKey == "VirtualJumpEnabled" then
+            virtualJumpFrame.Visible = _G_Settings.VirtualJumpEnabled
+        end
+    end)
+    return btn
+end
+
+-- Tạo các nút tính năng chính
+createToggle("⚡ Tăng Tốc (Speed)", 50, "SpeedEnabled")
+createToggle("🧍 Thu Nhỏ Cơ Thể", 100, "ShrinkEnabled")
+createToggle("💣 Auto TP Thông Minh", 150, "AutoTPEnabled")
+createToggle("🦘 Nhảy Cao (Jump)", 200, "JumpEnabled")           
+createToggle("🔘 Hiện Nút Nhảy Ảo", 250, "VirtualJumpEnabled")  
+
+-- Ô NHẬP PHẠM VI AUTO TP
+local studLabel = Instance.new("TextLabel", mainFrame)
+studLabel.Size = UDim2.new(0.5, 0, 0, 30)
+studLabel.Position = UDim2.new(0.075, 0, 0, 300)
+studLabel.BackgroundTransparency = 1
+studLabel.Text = "Phạm vi (Stud):"
+studLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+studLabel.Font = Enum.Font.GothamSemibold
+studLabel.TextSize = 13
+studLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local studInput = Instance.new("TextBox", mainFrame)
+studInput.Size = UDim2.new(0.3, 0, 0, 30)
+studInput.Position = UDim2.new(0.625, 0, 0, 300)
+studInput.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+studInput.Text = tostring(_G_Settings.MaxStuds)
+studInput.TextColor3 = Color3.new(1, 1, 1)
+studInput.Font = Enum.Font.GothamBold
+studInput.TextSize = 14
+Instance.new("UICorner", studInput).CornerRadius = UDim.new(0, 6)
+
+studInput.FocusLost:Connect(function()
+    local inputNumber = tonumber(studInput.Text)
+    if inputNumber and inputNumber > 0 then _G_Settings.MaxStuds = inputNumber else studInput.Text = tostring(_G_Settings.MaxStuds) end
+end)
+
+-- Ô NHẬP ĐỘ CAO NHẢY
+local jumpLabel = Instance.new("TextLabel", mainFrame)
+jumpLabel.Size = UDim2.new(0.5, 0, 0, 30)
+jumpLabel.Position = UDim2.new(0.075, 0, 0, 330)
+jumpLabel.BackgroundTransparency = 1
+jumpLabel.Text = "Độ cao nhảy:"
+jumpLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+jumpLabel.Font = Enum.Font.GothamSemibold
+jumpLabel.TextSize = 13
+jumpLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local jumpInput = Instance.new("TextBox", mainFrame)
+jumpInput.Size = UDim2.new(0.3, 0, 0, 30)
+jumpInput.Position = UDim2.new(0.625, 0, 0, 330)
+jumpInput.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+jumpInput.Text = tostring(_G_Settings.JumpPowerValue)
+jumpInput.TextColor3 = Color3.new(1, 1, 1)
+jumpInput.Font = Enum.Font.GothamBold
+jumpInput.TextSize = 14
+Instance.new("UICorner", jumpInput).CornerRadius = UDim.new(0, 6)
+
+jumpInput.FocusLost:Connect(function()
+    local inputNumber = tonumber(jumpInput.Text)
+    if inputNumber and inputNumber > 0 then _G_Settings.JumpPowerValue = inputNumber else jumpInput.Text = tostring(_G_Settings.JumpPowerValue) end
+end)
+
+-- Ô NHẬP TỐC ĐỘ CHẠY (WALKSPEED)
+local speedLabel = Instance.new("TextLabel", mainFrame)
+speedLabel.Size = UDim2.new(0.5, 0, 0, 30)
+speedLabel.Position = UDim2.new(0.075, 0, 0, 360)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "Tốc độ chạy:"
+speedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+speedLabel.Font = Enum.Font.GothamSemibold
+speedLabel.TextSize = 13
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local speedInput = Instance.new("TextBox", mainFrame)
+speedInput.Size = UDim2.new(0.3, 0, 0, 30)
+speedInput.Position = UDim2.new(0.625, 0, 0, 360)
+speedInput.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+speedInput.Text = tostring(_G_Settings.WalkSpeedValue)
+speedInput.TextColor3 = Color3.new(1, 1, 1)
+speedInput.Font = Enum.Font.GothamBold
+speedInput.TextSize = 14
+Instance.new("UICorner", speedInput).CornerRadius = UDim.new(0, 6)
+
+speedInput.FocusLost:Connect(function()
+    local inputNumber = tonumber(speedInput.Text)
+    if inputNumber and inputNumber > 0 then _G_Settings.WalkSpeedValue = inputNumber else speedInput.Text = tostring(_G_Settings.WalkSpeedValue) end
+end)
+
+-- ==========================================================
+-- PHẦN 2: CÁC NÚT TƯƠNG TÁC WAYPOINT
+-- ==========================================================
+
+-- Nút Lưu vị trí 1 (Trong Menu chính)
+local setLoc1Btn = Instance.new("TextButton", mainFrame)
+setLoc1Btn.Size = UDim2.new(0.4, 0, 0, 35)
+setLoc1Btn.Position = UDim2.new(0.075, 0, 0, 400)
+setLoc1Btn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+setLoc1Btn.Text = "📍 Lưu vị trí 1"
+setLoc1Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+setLoc1Btn.Font = Enum.Font.GothamBold
+setLoc1Btn.TextSize = 11
+Instance.new("UICorner", setLoc1Btn).CornerRadius = UDim.new(0, 6)
+
+-- Nút Lưu vị trí 2 (Trong Menu chính)
+local setLoc2Btn = Instance.new("TextButton", mainFrame)
+setLoc2Btn.Size = UDim2.new(0.4, 0, 0, 35)
+setLoc2Btn.Position = UDim2.new(0.525, 0, 0, 400)
+setLoc2Btn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+setLoc2Btn.Text = "📍 Lưu vị trí 2"
+setLoc2Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+setLoc2Btn.Font = Enum.Font.GothamBold
+setLoc2Btn.TextSize = 11
+Instance.new("UICorner", setLoc2Btn).CornerRadius = UDim.new(0, 6)
+
+-- Nút Xóa tất cả vị trí (Trong Menu chính)
+local clearAllBtn = Instance.new("TextButton", mainFrame)
+clearAllBtn.Size = UDim2.new(0.85, 0, 0, 35)
+clearAllBtn.Position = UDim2.new(0.075, 0, 0, 440)
+clearAllBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+clearAllBtn.Text = "❌ Xóa Toàn Bộ Vị Trí"
+clearAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+clearAllBtn.Font = Enum.Font.GothamBold
+clearAllBtn.TextSize = 12
+Instance.new("UICorner", clearAllBtn).CornerRadius = UDim.new(0, 6)
+
+-- LOGIC LIÊN KẾT HÀNH ĐỘNG CHO CÁC NÚT WAYPOINT
+setLoc1Btn.MouseButton1Click:Connect(function()
+    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if root then
+        customSavedLocation1 = root.CFrame
+        setLoc1Btn.Text = "✅ Đã Lưu 1"
+        task.wait(0.8)
+        setLoc1Btn.Text = "📍 Lưu vị trí 1"
+    end
+end)
+
+miniTp1Btn.MouseButton1Click:Connect(function()
+    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if root and customSavedLocation1 then
+        root.CFrame = customSavedLocation1
+    elseif not customSavedLocation1 then
+        miniTp1Btn.Text = "⚠️ Trống!"
+        task.wait(0.8)
+        miniTp1Btn.Text = "🚀 Dịch chuyển 1"
+    end
+end)
+
+setLoc2Btn.MouseButton1Click:Connect(function()
+    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if root then
+        customSavedLocation2 = root.CFrame
+        setLoc2Btn.Text = "✅ Đã Lưu 2"
+        task.wait(0.8)
+        setLoc2Btn.Text = "📍 Lưu vị trí 2"
+    end
+end)
+
+miniTp2Btn.MouseButton1Click:Connect(function()
+    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if root and customSavedLocation2 then
+        root.CFrame = customSavedLocation2
+    elseif not customSavedLocation2 then
+        miniTp2Btn.Text = "⚠️ Trống!"
+        task.wait(0.8)
+        miniTp2Btn.Text = "🚀 Dịch chuyển 2"
+    end
+end)
+
+clearAllBtn.MouseButton1Click:Connect(function()
+    customSavedLocation1 = nil
+    customSavedLocation2 = nil
+    clearAllBtn.Text = "✅ Đã Xóa Sạch Vị Trí"
+    task.wait(1)
+    clearAllBtn.Text = "❌ Xóa Toàn Bộ Vị Trí"
+end)
+
+-- ==========================================
+-- PHẦN 3: LÕI XỬ LÝ CHÍNH
+-- ==========================================
+runService.Heartbeat:Connect(function()
+    local char = player.Character
+    if not char then return end
+    
+    local hum = char:FindFirstChild("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    
+    if hum and root then
+        -- Xử lý tốc độ
+        if _G_Settings.SpeedEnabled then
+            hum.WalkSpeed = _G_Settings.WalkSpeedValue
+        elseif hum.WalkSpeed > 30 then 
+            hum.WalkSpeed = 16 
+        end
+        
+        -- Xử lý Nhảy Cao
+        if _G_Settings.JumpEnabled then
+            hum.UseJumpPower = true
+            hum.JumpPower = _G_Settings.JumpPowerValue
+        else
+            if hum.JumpPower > 50 then hum.JumpPower = 50 end
+        end
+        
+        -- Xử lý thu nhỏ
+        local headScale = hum:FindFirstChild("HeadScale")
+        local bodyDepth = hum:FindFirstChild("BodyDepthScale")
+        local bodyWidth = hum:FindFirstChild("BodyWidthScale")
+        local bodyHeight = hum:FindFirstChild("BodyHeightScale")
+        
+        if _G_Settings.ShrinkEnabled then
+            if headScale then headScale.Value = 0.5 end
+            if bodyDepth then bodyDepth.Value = 0.5 end
+            if bodyWidth then bodyWidth.Value = 0.5 end
+            if bodyHeight then bodyHeight.Value = 0.5 end
+        else
+            if headScale then headScale.Value = 1 end
+            if bodyDepth then bodyDepth.Value = 1 end
+            if bodyWidth then bodyWidth.Value = 1 end
+            if bodyHeight then bodyHeight.Value = 1 end
+        end
+        
+        -- Xử lý Auto TP
+        if _G_Settings.AutoTPEnabled then
+            local currentlyHasBomb = false
+            for _, item in pairs(char:GetChildren()) do
+                if item:IsA("Tool") and (string.find(string.lower(item.Name), "bomb") or string.find(string.lower(item.Name), "time")) then
+                    currentlyHasBomb = true
+                    break
+                end
+            end
+            
+            if currentlyHasBomb then
+                if not autoTPLastLocation then autoTPLastLocation = root.CFrame end
+                local nearestPlayer = nil
+                local minDistance = _G_Settings.MaxStuds
+                
+                for _, other in pairs(game:GetService("Players"):GetPlayers()) do
+                    if other ~= player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
+                        local otherHum = other.Character:FindFirstChild("Humanoid")
+                        local otherRoot = other.Character.HumanoidRootPart
+                        
+                        if otherHum and otherHum.Health > 0 then
+                            local hasForceField = other.Character:FindFirstChildOfClass("ForceField")
+                            if not hasForceField then
+                                local dist = (root.Position - otherRoot.Position).Magnitude
+                                if dist < minDistance and dist > 1 then
+                                    minDistance = dist
+                                    nearestPlayer = other
+                                end
+                            end
+                        end
+                    end
+                end
+                if nearestPlayer then root.CFrame = nearestPlayer.Character.HumanoidRootPart.CFrame end
+            else
+                if autoTPLastLocation then
+                    root.CFrame = autoTPLastLocation
+                    autoTPLastLocation = nil
+                end
+            end
+        end
+    end
+end)
+
+print("⚡ Bản cập nhật TIMEBOMB VIP V6.7 đã sẵn sàng hoạt động!")
